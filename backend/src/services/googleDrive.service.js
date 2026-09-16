@@ -131,10 +131,19 @@ export async function moveDriveFile(fileId, newParentDriveFolderId) {
 }
 
 async function accessToken_() {
-  const result = await getGoogleOAuthClient().getAccessToken();
-  const token = typeof result === 'string' ? result : result?.token;
-  if (!token) throw new Error('Google OAuth access token tidak tersedia. Jalankan ulang npm run drive:auth.');
-  return token;
+  try {
+    const result = await getGoogleOAuthClient().getAccessToken();
+    const token = typeof result === 'string' ? result : result?.token;
+    if (!token) throw new Error('Google OAuth access token tidak tersedia.');
+    return token;
+  } catch (error) {
+    const detail = String(error?.response?.data?.error_description || error?.response?.data?.error?.message || error?.message || error || 'unknown_error').slice(0, 500);
+    const wrapped = new Error(`Google OAuth gagal memperoleh access token: ${detail}`);
+    wrapped.code = 'GOOGLE_OAUTH_TOKEN_FAILED';
+    wrapped.statusCode = 503;
+    wrapped.isOperational = true;
+    throw wrapped;
+  }
 }
 
 export async function createDriveResumableSession({ name, mimeType, fileSize, parentDriveFolderId }) {
