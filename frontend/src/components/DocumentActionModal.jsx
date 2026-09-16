@@ -84,6 +84,13 @@ export default function DocumentActionModal({ documentId, initialDocument = null
   }
 
   async function doMove() {
+    const currentFolderId = String(document?.folderId || '');
+    const selectedFolderId = String(targetFolderId || '');
+    if (currentFolderId === selectedFolderId) {
+      setError('Dokumen sudah berada di folder tersebut. Pilih folder tujuan yang berbeda.');
+      return;
+    }
+
     setBusy(true); setError('');
     try { await moveDocument(documentId, targetFolderId); await onChanged?.(); onClose?.(); }
     catch (err) { setError(err.message || 'Move gagal.'); }
@@ -147,7 +154,7 @@ export default function DocumentActionModal({ documentId, initialDocument = null
 
         {view === 'rename' ? <div className="document-form-view"><label className="folder-field"><span>Nama Dokumen</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label><div className="doc-modal-actions"><button onClick={() => setView('detail')}>Batal</button><button className="primary-doc-action" disabled={busy || !name.trim()} onClick={doRename}>Simpan Rename</button></div></div> : null}
 
-        {view === 'move' ? <div className="document-form-view"><label className="folder-field"><span>Folder Tujuan</span><select value={targetFolderId} onChange={(e) => setTargetFolderId(e.target.value)}>{tree.map((row) => <option key={row.folderId || 'root'} value={row.folderId || ''}>{row.path}</option>)}</select></label><div className="doc-modal-actions"><button onClick={() => setView('detail')}>Batal</button><button className="primary-doc-action" disabled={busy} onClick={doMove}>Pindahkan</button></div></div> : null}
+        {view === 'move' ? <div className="document-form-view"><label className="folder-field"><span>Folder Tujuan</span><select value={targetFolderId} onChange={(e) => { setTargetFolderId(e.target.value); setError(''); }}>{tree.map((row) => <option key={row.folderId || 'root'} value={row.folderId || ''}>{row.path}</option>)}</select></label>{String(targetFolderId || '') === String(document?.folderId || '') ? <div className="folder-modal-note warning">Dokumen saat ini sudah berada di folder ini. Pilih folder tujuan yang berbeda.</div> : null}<div className="doc-modal-actions"><button onClick={() => setView('detail')}>Batal</button><button className="primary-doc-action" disabled={busy || String(targetFolderId || '') === String(document?.folderId || '')} onClick={doMove}>Pindahkan</button></div></div> : null}
 
         {view === 'delete' ? <div className="document-form-view"><div className="folder-modal-note warning">Dokumen <strong>{document.originalFilename}</strong> akan dipindahkan ke Recycle Bin. File Google Drive belum dihapus permanen.</div><div className="doc-modal-actions"><button onClick={() => setView('detail')}>Batal</button><button className="danger-doc-action" disabled={busy} onClick={doDelete}>Hapus Dokumen</button></div></div> : null}
 

@@ -369,12 +369,64 @@ export async function renameDocument({ auth, documentId, documentName, ipAddress
 export async function moveDocument({ auth, documentId, targetFolderId = '', ipAddress, userAgent }) {
   const document = await assertDocumentAccess(auth, await findDocumentById(documentId), 'can_move');
   const targetId = String(targetFolderId || '').trim() || null;
+  const currentId = String(document.folder_id || '').trim() || null;
+
+  // Jangan memanggil Google Drive kalau user memilih folder yang sama.
+  // Ini juga membuat aksi move idempotent dan mencegah error API yang tidak perlu.
+  if (targetId === currentId) {
+    return publicDocument(document);
+  }
+
   const division = await resolveDivision(auth, document.division_id);
   const targetFolder = await assertFolderUnlocked(auth, division.id, targetId);
-  const targetDriveFolderId = targetFolder?.google_drive_folder_id || division.google_drive_folder_id;
-  await moveDriveFile(document.google_drive_file_id, targetDriveFolderId);
-  const updated = await updateDocument(document.id, { folder_id: targetId, updated_at: new Date().toISOString() });
-  void writeAuditSafe({ user: auth.user, action: 'MOVE_DOCUMENT', objectType: 'DOCUMENT', objectId: document.id, objectName: document.original_filename, detail: 'Dokumen dipindahkan.', ipAddress, userAgent });
+  const targetDriveFolderId = String(targetFolder?.google_drive_folder_id || division.google_drive_folder_id || '').trim();
+
+  if (!targetDriveFolderId) {
+    throw new AppError('Folder tujuan belum mempunyai Google Drive Folder ID.', {
+      statusCode: 409,
+      code: 'TARGET_DRIVE_FOLDER_MISSING'
+    });
+  }
+
+  if (!document.google_drive_file_id) {
+    throw new AppError('Dokumen belum mempunyai Google Drive File ID.', {
+      statusCode: 409,
+      code: 'DOCUMENT_DRIVE_FILE_MISSING'
+    });
+  }
+
+  try {
+    await moveDriveFile(document.google_drive_file_id, targetDriveFolderId);
+  } catch (error) {
+    console.error('[KASA MOVE DOCUMENT DRIVE ERROR]', {
+      documentId: document.id,
+      driveFileId: document.google_drive_file_id,
+      targetFolderId: targetId,
+      targetDriveFolderId,
+      message: error?.message || String(error)
+    });
+    throw new AppError('Google Drive gagal memindahkan dokumen. Periksa akses file dan folder tujuan.', {
+      statusCode: 502,
+      code: 'GOOGLE_DRIVE_MOVE_FAILED'
+    });
+  }
+
+  const updated = await updateDocument(document.id, {
+    folder_id: targetId,
+    updated_at: new Date().toISOString()
+  });
+
+  void writeAuditSafe({
+    user: auth.user,
+    action: 'MOVE_DOCUMENT',
+    objectType: 'DOCUMENT',
+    objectId: document.id,
+    objectName: document.original_filename,
+    detail: 'Dokumen dipindahkan.',
+    ipAddress,
+    userAgent
+  });
+
   return publicDocument(updated);
 }
 
