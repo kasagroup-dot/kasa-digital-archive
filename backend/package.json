@@ -22,7 +22,7 @@
     "production:check:strict": "node scripts/production-readiness.js --strict"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.109.0",
