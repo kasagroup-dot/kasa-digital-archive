@@ -82,7 +82,7 @@ export async function getRuntimeStatus() {
 
 export async function login(username, password, rememberMe) {
   const result = await request('/auth/login', {
-    method: 'POST', auth: false, timeoutMs: 12000,
+    method: 'POST', auth: false, timeoutMs: 30000,
     body: JSON.stringify({ username, password, rememberMe: Boolean(rememberMe) })
   });
   setAccessToken(result?.data?.accessToken || '');
