@@ -2,6 +2,7 @@ import { AppError } from '../utils/AppError.js';
 import { writeAuditSafe } from './audit.service.js';
 import {
   createDriveResumableSession,
+  uploadDriveFileDirect,
   getDriveFileMetadata,
   moveDriveFile,
   renameDriveFile,
@@ -182,6 +183,160 @@ export async function checkUploadDuplicates({ auth, divisionId, folderId = '', n
     if (found) output.push({ name, documentId: found.id, version: Number(found.current_version || 1) });
   }
   return { duplicates: output };
+}
+
+export async function uploadDirect({ auth, payload, buffer, ipAddress, userAgent }) {
+  requirePermission(auth, 'can_upload', 'Anda tidak mempunyai izin upload.');
+
+  if (!Buffer.isBuffer(buffer) || !buffer.length) {
+    throw new AppError('File upload kosong.', { statusCode: 400, code: 'UPLOAD_EMPTY' });
+  }
+
+  const division = await resolveDivision(auth, payload?.divisionId);
+  const folderId = String(payload?.folderId || '').trim() || null;
+  const folder = await assertFolderUnlocked(auth, division.id, folderId);
+  const requestedFilename = cleanFilename(payload?.filename);
+  const mimeType = String(payload?.mimeType || 'application/octet-stream').slice(0, 255);
+  const fileSize = buffer.length;
+
+  const maxBytes = await getMaxUploadBytes();
+  if (fileSize > maxBytes) {
+    throw new AppError(`File melebihi batas upload ${(maxBytes / 1024 / 1024).toFixed(0)} MB.`, {
+      statusCode: 413,
+      code: 'UPLOAD_TOO_LARGE'
+    });
+  }
+
+  const duplicate = await findDuplicateDocument({
+    divisionId: division.id,
+    folderId,
+    filename: requestedFilename
+  });
+
+  const duplicateAction = String(payload?.duplicateAction || 'none').toLowerCase();
+  if (duplicate && !['version', 'autorename'].includes(duplicateAction)) {
+    throw new AppError('File dengan nama yang sama sudah tersedia.', {
+      statusCode: 409,
+      code: 'DUPLICATE_FILE',
+      details: {
+        duplicate: {
+          documentId: duplicate.id,
+          name: requestedFilename,
+          version: duplicate.current_version
+        }
+      }
+    });
+  }
+
+  let finalFilename = requestedFilename;
+  if (duplicate && duplicateAction === 'autorename') {
+    finalFilename = uniqueFilename(
+      requestedFilename,
+      await listSiblingDocumentNames({ divisionId: division.id, folderId })
+    );
+  }
+
+  const documentName = cleanDocumentName(payload?.documentName, baseName(finalFilename));
+  const targetDriveFolderId = folder?.google_drive_folder_id || division.google_drive_folder_id;
+  if (!targetDriveFolderId) {
+    throw new AppError('Google Drive folder tujuan belum terhubung.', {
+      statusCode: 500,
+      code: 'DRIVE_TARGET_MISSING'
+    });
+  }
+
+  const driveFile = await uploadDriveFileDirect({
+    name: finalFilename,
+    mimeType,
+    buffer,
+    parentDriveFolderId: targetDriveFolderId
+  });
+
+  const now = new Date().toISOString();
+  const ext = extOf(finalFilename);
+  const fileType = classifyFile(finalFilename, mimeType || driveFile.mimeType);
+
+  const common = {
+    google_drive_file_id: driveFile.id,
+    drive_url: driveFile.webViewLink || `https://drive.google.com/file/d/${driveFile.id}/view`,
+    original_filename: finalFilename,
+    document_name: documentName,
+    mime_type: mimeType || driveFile.mimeType || 'application/octet-stream',
+    extension: ext,
+    file_type: fileType,
+    file_size: Number(driveFile.size || fileSize),
+    folder_id: folderId,
+    division_id: division.id,
+    uploaded_by_user_id: auth.user.id,
+    uploaded_by_username_snapshot: auth.user.username,
+    updated_at: now
+  };
+
+  let document;
+  if (duplicate && duplicateAction === 'version') {
+    const old = await assertDocumentAccess(auth, duplicate, 'can_upload');
+    const oldVersion = Number(old.current_version || 1);
+
+    await insertDocumentVersion({
+      document_id: old.id,
+      version_number: oldVersion,
+      google_drive_file_id: old.google_drive_file_id,
+      drive_url: old.drive_url || null,
+      original_filename: old.original_filename,
+      mime_type: old.mime_type || null,
+      extension: old.extension || null,
+      file_size: Number(old.file_size || 0),
+      uploaded_by_user_id: old.uploaded_by_user_id || null,
+      uploaded_by_username_snapshot: old.uploaded_by_username_snapshot || null,
+      uploaded_at: old.uploaded_at || now,
+      description: 'Versi terdahulu sebelum upload versi baru'
+    });
+
+    document = await updateDocument(old.id, {
+      ...common,
+      current_version: oldVersion + 1,
+      uploaded_at: now,
+      status: 'ACTIVE'
+    });
+
+    void writeAuditSafe({
+      user: auth.user,
+      action: 'UPLOAD_NEW_VERSION',
+      objectType: 'DOCUMENT',
+      objectId: old.id,
+      objectName: finalFilename,
+      detail: `Versi ${oldVersion + 1} diupload lewat fast upload.`,
+      ipAddress,
+      userAgent
+    });
+  } else {
+    document = await insertDocument({
+      ...common,
+      current_version: 1,
+      uploaded_at: now,
+      status: 'ACTIVE'
+    });
+
+    void writeAuditSafe({
+      user: auth.user,
+      action: 'UPLOAD_DOCUMENT',
+      objectType: 'DOCUMENT',
+      objectId: document.id,
+      objectName: finalFilename,
+      detail: 'Dokumen berhasil diupload lewat fast upload.',
+      ipAddress,
+      userAgent
+    });
+  }
+
+  return {
+    uploadId: null,
+    complete: true,
+    bytesUploaded: fileSize,
+    totalBytes: fileSize,
+    fastPath: true,
+    document: publicDocument(document)
+  };
 }
 
 export async function startResumableUpload({ auth, payload, ipAddress, userAgent }) {
