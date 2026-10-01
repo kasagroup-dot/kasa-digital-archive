@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Brand from '../components/Brand.jsx';
 import OrganizationTree from '../components/OrganizationTree.jsx';
 import ForgotPasswordModal from '../components/ForgotPasswordModal.jsx';
@@ -7,11 +7,38 @@ import { login } from '../services/api.js';
 export default function LoginPage({ onLogin, maintenance }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [inputsUnlocked, setInputsUnlocked] = useState(false);
+  const usernameRef = useRef(null);
+  const passwordRef = useRef(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [forgotOpen, setForgotOpen] = useState(false);
+
+  useEffect(() => {
+    function clearCredentials() {
+      setUsername('');
+      setPassword('');
+
+      if (usernameRef.current) usernameRef.current.value = '';
+      if (passwordRef.current) passwordRef.current.value = '';
+    }
+
+    clearCredentials();
+
+    // Browser/password manager kadang mengisi credential beberapa saat
+    // setelah halaman selesai render. Bersihkan beberapa kali saat startup.
+    const timers = [80, 250, 700, 1500].map((delay) =>
+      window.setTimeout(clearCredentials, delay)
+    );
+
+    return () => timers.forEach((id) => window.clearTimeout(id));
+  }, []);
+
+  function unlockInputs() {
+    setInputsUnlocked(true);
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -74,17 +101,36 @@ export default function LoginPage({ onLogin, maintenance }) {
           ) : null}
 
           <form className="login-form" onSubmit={submit} noValidate autoComplete="off">
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                left: '-10000px',
+                width: '1px',
+                height: '1px',
+                overflow: 'hidden'
+              }}
+            >
+              <input tabIndex="-1" type="text" name="username" autoComplete="username" />
+              <input tabIndex="-1" type="password" name="password" autoComplete="current-password" />
+            </div>
+
             <div className="field">
               <label className="field-label" htmlFor="username">Username</label>
               <input
+                ref={usernameRef}
                 id="username"
-                name="kasa_archive_username"
+                name="kasa_archive_login_id"
                 className="login-input"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                onFocus={unlockInputs}
+                onPointerDown={unlockInputs}
+                readOnly={!inputsUnlocked}
                 autoComplete="off"
                 data-lpignore="true"
                 data-1p-ignore="true"
+                data-form-type="other"
                 autoCapitalize="none"
                 spellCheck="false"
                 placeholder="your.username"
@@ -96,15 +142,20 @@ export default function LoginPage({ onLogin, maintenance }) {
               <label className="field-label" htmlFor="password">Password</label>
               <div className="password-wrap">
                 <input
+                  ref={passwordRef}
                   id="password"
-                  name="kasa_archive_password"
+                  name="kasa_archive_access_key"
                   className="login-input"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onFocus={unlockInputs}
+                  onPointerDown={unlockInputs}
+                  readOnly={!inputsUnlocked}
                   autoComplete="new-password"
                   data-lpignore="true"
                   data-1p-ignore="true"
+                  data-form-type="other"
                   placeholder="••••••••"
                   disabled={loading}
                 />
