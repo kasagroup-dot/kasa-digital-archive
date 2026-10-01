@@ -98,10 +98,22 @@ export default function DocumentActionModal({ documentId, initialDocument = null
   }
 
   async function doDelete() {
-    setBusy(true); setError('');
-    try { await deleteDocument(documentId); await onChanged?.(); onClose?.(); }
-    catch (err) { setError(err.message || 'Delete gagal.'); }
-    finally { setBusy(false); }
+    if (busy) return;
+
+    setBusy(true);
+    setError('');
+
+    try {
+      await deleteDocument(documentId);
+
+      // Tutup modal segera setelah backend mengonfirmasi delete.
+      // Refresh daftar dijalankan non-blocking agar UI tidak terlihat hang.
+      onClose?.();
+      Promise.resolve(onChanged?.()).catch(() => {});
+    } catch (err) {
+      setError(err.message || 'Delete gagal.');
+      setBusy(false);
+    }
   }
 
   async function doFavorite() {
@@ -126,6 +138,7 @@ export default function DocumentActionModal({ documentId, initialDocument = null
           <button onClick={onClose}><Icon name="close" size={18}/></button>
         </div>
         {error ? <div className="dashboard-error document-engine-error">{error}</div> : null}
+        {busy && view === 'delete' ? <div className="folder-modal-note">Sedang memindahkan dokumen ke Recycle Bin…</div> : null}
 
         {view === 'detail' ? <>
           <div className="doc-modal-grid">
@@ -156,7 +169,7 @@ export default function DocumentActionModal({ documentId, initialDocument = null
 
         {view === 'move' ? <div className="document-form-view"><label className="folder-field"><span>Folder Tujuan</span><select value={targetFolderId} onChange={(e) => { setTargetFolderId(e.target.value); setError(''); }}>{tree.map((row) => <option key={row.folderId || 'root'} value={row.folderId || ''}>{row.path}</option>)}</select></label>{String(targetFolderId || '') === String(document?.folderId || '') ? <div className="folder-modal-note warning">Dokumen saat ini sudah berada di folder ini. Pilih folder tujuan yang berbeda.</div> : null}<div className="doc-modal-actions"><button onClick={() => setView('detail')}>Batal</button><button className="primary-doc-action" disabled={busy || String(targetFolderId || '') === String(document?.folderId || '')} onClick={doMove}>Pindahkan</button></div></div> : null}
 
-        {view === 'delete' ? <div className="document-form-view"><div className="folder-modal-note warning">Dokumen <strong>{document.originalFilename}</strong> akan dipindahkan ke Recycle Bin. File Google Drive belum dihapus permanen.</div><div className="doc-modal-actions"><button onClick={() => setView('detail')}>Batal</button><button className="danger-doc-action" disabled={busy} onClick={doDelete}>Hapus Dokumen</button></div></div> : null}
+        {view === 'delete' ? <div className="document-form-view"><div className="folder-modal-note warning">Dokumen <strong>{document.originalFilename}</strong> akan dipindahkan ke Recycle Bin. File Google Drive belum dihapus permanen.</div><div className="doc-modal-actions"><button onClick={() => setView('detail')}>Batal</button><button className="danger-doc-action" disabled={busy} onClick={doDelete}>{busy ? 'Menghapus…' : 'Hapus Dokumen'}</button></div></div> : null}
 
         {view === 'versions' ? <div className="document-versions-view"><div className="document-subbar"><button onClick={() => setView('detail')}><Icon name="arrowLeft" size={15}/> Kembali</button><span>Riwayat versi</span></div>
           {versions ? <div className="version-list">

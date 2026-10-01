@@ -345,7 +345,10 @@ export async function moveDocument(documentId, targetFolderId = '') {
 }
 
 export async function deleteDocument(documentId) {
-  return request(`/document-engine/${encodeURIComponent(documentId)}`, { method: 'DELETE', timeoutMs: 15000 });
+  return request(`/document-engine/${encodeURIComponent(documentId)}`, {
+    method: 'DELETE',
+    timeoutMs: 30000
+  });
 }
 
 export async function toggleDocumentFavorite(documentId) {
