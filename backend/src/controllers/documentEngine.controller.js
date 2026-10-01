@@ -9,6 +9,7 @@ import {
   moveDocument,
   renameDocument,
   startResumableUpload,
+  uploadDirect,
   toggleFavorite,
   uploadChunk
 } from '../services/documentEngine.service.js';
@@ -20,6 +21,29 @@ function requestMeta(req) {
 export async function duplicatePreflight(req, res, next) {
   try { return sendSuccess(res, { message: 'Preflight upload selesai.', data: await checkUploadDuplicates({ auth: req.auth, divisionId: req.body?.divisionId, folderId: req.body?.folderId, names: req.body?.names }) }); }
   catch (error) { return next(error); }
+}
+
+export async function directUpload(req, res, next) {
+  try {
+    return sendSuccess(res, {
+      message: 'Fast upload selesai.',
+      data: await uploadDirect({
+        auth: req.auth,
+        payload: {
+          divisionId: req.query?.divisionId,
+          folderId: req.query?.folderId,
+          filename: req.query?.filename,
+          documentName: req.query?.documentName,
+          duplicateAction: req.query?.duplicateAction,
+          mimeType: req.get('x-file-mime') || 'application/octet-stream'
+        },
+        buffer: req.body,
+        ...requestMeta(req)
+      })
+    });
+  } catch (error) {
+    return next(error);
+  }
 }
 
 export async function startUpload(req, res, next) {
