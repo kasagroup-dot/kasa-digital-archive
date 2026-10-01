@@ -133,6 +133,7 @@ export function createApp() {
         'Authorization',
         'X-Request-ID',
         'X-Requested-With',
+        'X-File-Mime',
         'Accept'
       ],
 

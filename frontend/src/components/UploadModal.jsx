@@ -5,7 +5,7 @@ import Icon from './Icon.jsx';
 import {
   cancelResumableUpload,
   checkUploadDuplicates,
-  uploadFileResumable
+  uploadFileSmart
 } from '../services/api.js';
 
 function stripExtension(name) {
@@ -29,7 +29,7 @@ export default function UploadModal({ divisionId, folderId = '', onClose, onUplo
       const controller = new AbortController();
       let currentUploadId = '';
       const singleName = files.length === 1 ? documentName : '';
-      uploadFileResumable({
+      uploadFileSmart({
         divisionId,
         folderId,
         file,
@@ -88,7 +88,7 @@ export default function UploadModal({ divisionId, folderId = '', onClose, onUplo
           <button onClick={() => !processing && onClose?.()}><Icon name="close" size={17} /></button>
         </div>
         <div className="folder-modal-body">
-          <div className="upload-v11-note">FilePond aktif · resumable upload 4 MB/chunk · progress per file · retry aman untuk file besar.</div>
+          <div className="upload-v11-note">FilePond aktif · fast upload untuk file kecil · resumable 4 MB/chunk untuk file besar.</div>
 
           <FilePond
             ref={pondRef}

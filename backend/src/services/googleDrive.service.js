@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { google } from 'googleapis';
 import { env, assertGoogleDriveEnv } from '../config/env.js';
 
@@ -135,6 +136,29 @@ async function accessToken_() {
   const token = typeof result === 'string' ? result : result?.token;
   if (!token) throw new Error('Google OAuth access token tidak tersedia. Jalankan ulang npm run drive:auth.');
   return token;
+}
+
+export async function uploadDriveFileDirect({ name, mimeType, buffer, parentDriveFolderId }) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) {
+    throw new Error('Buffer upload langsung kosong.');
+  }
+
+  const drive = getGoogleDrive();
+  const { data } = await drive.files.create({
+    requestBody: {
+      name: String(name),
+      mimeType: String(mimeType || 'application/octet-stream'),
+      parents: [String(parentDriveFolderId)]
+    },
+    media: {
+      mimeType: String(mimeType || 'application/octet-stream'),
+      body: Readable.from([buffer])
+    },
+    fields: 'id,name,mimeType,size,parents,webViewLink',
+    supportsAllDrives: true
+  });
+
+  return data;
 }
 
 export async function createDriveResumableSession({ name, mimeType, fileSize, parentDriveFolderId }) {
