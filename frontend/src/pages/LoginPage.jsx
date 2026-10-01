@@ -73,15 +73,18 @@ export default function LoginPage({ onLogin, maintenance }) {
             </div>
           ) : null}
 
-          <form className="login-form" onSubmit={submit} noValidate>
+          <form className="login-form" onSubmit={submit} noValidate autoComplete="off">
             <div className="field">
               <label className="field-label" htmlFor="username">Username</label>
               <input
                 id="username"
+                name="kasa_archive_username"
                 className="login-input"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
                 autoCapitalize="none"
                 spellCheck="false"
                 placeholder="your.username"
@@ -94,11 +97,14 @@ export default function LoginPage({ onLogin, maintenance }) {
               <div className="password-wrap">
                 <input
                   id="password"
+                  name="kasa_archive_password"
                   className="login-input"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   placeholder="••••••••"
                   disabled={loading}
                 />
