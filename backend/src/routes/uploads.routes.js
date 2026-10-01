@@ -5,6 +5,7 @@ import * as controller from '../controllers/documentEngine.controller.js';
 const router = Router();
 router.use(authenticate);
 router.post('/preflight', controller.duplicatePreflight);
+router.post('/direct', express.raw({ type: 'application/octet-stream', limit: '6mb' }), controller.directUpload);
 router.post('/resumable/start', controller.startUpload);
 router.put('/resumable/:uploadId/chunk', express.raw({ type: 'application/octet-stream', limit: '5mb' }), controller.chunkUpload);
 router.delete('/resumable/:uploadId', controller.cancel);
