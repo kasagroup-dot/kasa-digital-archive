@@ -203,6 +203,41 @@ export async function checkUploadDuplicates({ divisionId, folderId = '', names =
   });
 }
 
+export async function uploadFileDirect({ divisionId, folderId = '', file, documentName = '', duplicateAction = 'none', progress, signal }) {
+  const qs = new URLSearchParams({
+    divisionId: String(divisionId || ''),
+    folderId: String(folderId || ''),
+    filename: String(file?.name || ''),
+    documentName: String(documentName || ''),
+    duplicateAction: String(duplicateAction || 'none')
+  });
+
+  const result = await request(`/uploads/direct?${qs.toString()}`, {
+    method: 'POST',
+    timeoutMs: 0,
+    signal,
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'X-File-Mime': String(file?.type || 'application/octet-stream')
+    },
+    body: file
+  });
+
+  progress?.(true, Number(file?.size || 0), Number(file?.size || 0));
+  return result?.data || {};
+}
+
+export async function uploadFileSmart(options) {
+  const file = options?.file;
+  const FAST_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+
+  if (Number(file?.size || 0) <= FAST_UPLOAD_MAX_BYTES) {
+    return uploadFileDirect(options);
+  }
+
+  return uploadFileResumable(options);
+}
+
 export async function startResumableUpload({ divisionId, folderId = '', file, documentName = '', duplicateAction = 'none', clientUploadId = '' }) {
   return request('/uploads/resumable/start', {
     method: 'POST',
